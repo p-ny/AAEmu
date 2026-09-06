@@ -3420,9 +3420,6 @@ public partial class Character : Unit, ICharacter
                         reader.GetFloat("yaw"), reader.GetFloat("pitch"), reader.GetFloat("roll")
                         );
                     character.Faction = FactionManager.Instance.GetFaction((FactionsEnum)reader.GetUInt32("faction_id"));
-                    var originFactionId = reader.GetUInt32("origin_faction_id");
-                    character.OriginFaction = originFactionId != 0 ? FactionManager.Instance.GetFaction((FactionsEnum)originFactionId) : null;
-                    character.IsTempFaction = character.OriginFaction != null;
                     character.FactionName = reader.GetString("faction_name");
                     character.Expedition = ExpeditionManager.Instance.GetExpedition((FactionsEnum)reader.GetUInt32("expedition_id"));
                     character.Family = reader.GetUInt32("family");
@@ -3558,9 +3555,6 @@ public partial class Character : Unit, ICharacter
                         reader.GetFloat("yaw"), reader.GetFloat("pitch"), reader.GetFloat("roll")
                         );
                     character.Faction = FactionManager.Instance.GetFaction((FactionsEnum)reader.GetUInt32("faction_id"));
-                    var originFactionId = reader.GetUInt32("origin_faction_id");
-                    character.OriginFaction = originFactionId != 0 ? FactionManager.Instance.GetFaction((FactionsEnum)originFactionId) : null;
-                    character.IsTempFaction = character.OriginFaction != null;
                     character.FactionName = reader.GetString("faction_name");
                     character.Expedition = ExpeditionManager.Instance.GetExpedition((FactionsEnum)reader.GetUInt32("expedition_id"));
                     character.Family = reader.GetUInt32("family");
@@ -3855,7 +3849,7 @@ public partial class Character : Unit, ICharacter
                     // accounts.local_labor. REPLACE INTO resets the obsolete column to its default.
                     "`hp`,`mp`,`consumed_lp`,`ability1`,`ability2`,`ability3`," +
                     "`world_id`,`zone_id`,`x`,`y`,`z`,`roll`,`pitch`,`yaw`," +
-                    "`faction_id`,`origin_faction_id`,`faction_name`,`expedition_id`,`family`,`dead_count`,`dead_time`,`rez_wait_duration`,`rez_time`,`rez_penalty_duration`,`leave_time`," +
+                    "`faction_id`,`faction_name`,`expedition_id`,`family`,`dead_count`,`dead_time`,`rez_wait_duration`,`rez_time`,`rez_penalty_duration`,`leave_time`," +
                     "`money`,`money2`,`aa_point`,`bank_aa_point`,`honor_point`,`vocation_point`,`leadership_point`,`leadership_period_point`,`accumulated_leadership_point`,`daily_leadership_point`,`last_daily_leadership_point_time`,`dominion_point_weekly_given`,`last_dominion_point_give_time`,`mobilization_order_today_count`,`mobilization_order_total_count`,`last_mobilization_order_time`,`crime_point`,`crime_record`,`jury_point`," +
                     "`hostile_faction_kills`,`pvp_honor`,`died_in_pvp`,`died_in_pvp_war_zone`," +
                     "`delete_request_time`,`transfer_request_time`,`delete_time`,`auto_use_aapoint`,`prev_point`,`point`,`gift`," +
@@ -3868,7 +3862,7 @@ public partial class Character : Unit, ICharacter
                     "@id,@account_id,@name,@access_level,@race,@gender,@unit_model_params,@level,@experience,@recoverable_exp,@heir_exp," +
                     "@hp,@mp,@consumed_lp,@ability1,@ability2,@ability3," +
                     "@world_id,@zone_id,@x,@y,@z,@yaw,@pitch,@roll," +
-                    "@faction_id,@origin_faction_id,@faction_name,@expedition_id,@family,@dead_count,@dead_time,@rez_wait_duration,@rez_time,@rez_penalty_duration,@leave_time," +
+                    "@faction_id,@faction_name,@expedition_id,@family,@dead_count,@dead_time,@rez_wait_duration,@rez_time,@rez_penalty_duration,@leave_time," +
                     "@money,@money2,@aa_point,@bank_aa_point,@honor_point,@vocation_point,@leadership_point,@leadership_period_point,@accumulated_leadership_point,@daily_leadership_point,@last_daily_leadership_point_time,@dominion_point_weekly_given,@last_dominion_point_give_time,@mobilization_order_today_count,@mobilization_order_total_count,@last_mobilization_order_time,@crime_point,@crime_record,@jury_point," +
                     "@hostile_faction_kills,@pvp_honor,@died_in_pvp,@died_in_pvp_war_zone," +
                     "@delete_request_time,@transfer_request_time,@delete_time,@auto_use_aapoint,@prev_point,@point,@gift," +
@@ -3917,7 +3911,6 @@ public partial class Character : Unit, ICharacter
                 command.Parameters.AddWithValue("@pitch", saveFromInstanceReturn ? MainWorldPosition.World.Rotation.Y : Transform.World.Rotation.Y);
                 command.Parameters.AddWithValue("@yaw", saveFromInstanceReturn ? MainWorldPosition.World.Rotation.Z : Transform.World.Rotation.Z);
                 command.Parameters.AddWithValue("@faction_id", Faction.Id);
-                command.Parameters.AddWithValue("@origin_faction_id", OriginFaction?.Id ?? 0);
                 command.Parameters.AddWithValue("@faction_name", FactionName);
                 command.Parameters.AddWithValue("@expedition_id", Expedition?.Id ?? 0);
                 command.Parameters.AddWithValue("@family", Family);

@@ -97,12 +97,6 @@ public class GuildDominionManager(IExpeditionManager expeditionManager, IGameDat
                 LastSiegeEndTime = reader.GetDateTime(reader.GetOrdinal("last_siege_end_time")),
                 ReignStartTime = reader.GetDateTime(reader.GetOrdinal("reign_start_time")),
                 LastTaxRateChangedTime = reader.GetDateTime(reader.GetOrdinal("last_tax_rate_changed_time")),
-                LastNationalTaxRateChagedTime = DateTime.UtcNow,
-                NationalTaxRate = 0,
-                NationalMonumentDbId = 0,
-                NationalMonumentX = 0,
-                NationalMonumentY = 0,
-                NationalMonumentZ = 0,
                 ObjId = 0,
                 TerritoryData = DominionManager.BuildTerritoryData(guardTowerSettingId),
                 SiegeTimers = new DominionSiegeTimers
@@ -212,61 +206,6 @@ public class GuildDominionManager(IExpeditionManager expeditionManager, IGameDat
         return targetTier;
     }
 
-    /// <summary>
-    /// Nation-founding bridge (2026-08-24 fix): pulls a guild dominion's full live state out of this manager so
-    /// DominionManager can adopt it as a nation - see NationManager.DeclareIndependence. Only ever called for
-    /// zone 54/56 (NationFoundableZoneGroups is scoped to exactly those two), the sole case where a dominion
-    /// legitimately crosses from the guild system into the Hero/faction system. Removes from every in-memory
-    /// dict and deletes the `guild_dominions` row - mirrors DominionManager.UnclaimTerritory's cleanup shape
-    /// minus the House-unbuild step (the House stays built/owned, only the claim-tracking state moves).
-    /// </summary>
-    public GuildDominionTransferState RemoveForTransfer(ushort zoneId)
-    {
-        if (!_guildDominions.TryGetValue(zoneId, out var dominion))
-            return null;
-
-        _guildDominions.Remove(zoneId);
-        _guardTowerSettingIdByZone.Remove(zoneId, out var guardTowerSettingId);
-        _guardTowerStepByZone.Remove(zoneId, out var guardTowerStep);
-        _castleTierByZone.Remove(zoneId, out var castleTier);
-        _builtStructuresByZone.Remove(zoneId, out var builtStructures);
-
-        using (var connection = MySQL.CreateConnection())
-        using (var command = connection.CreateCommand())
-        {
-            command.CommandText = "DELETE FROM guild_dominions WHERE zone_id = @zoneId";
-            command.Parameters.AddWithValue("@zoneId", zoneId);
-            command.Prepare();
-            command.ExecuteNonQuery();
-        }
-
-        Logger.Info("Guild dominion zone {0} removed for transfer out of the guild system (was Expedition {1})", zoneId, dominion.ExpeditionId);
-        return new GuildDominionTransferState(dominion, guardTowerSettingId, guardTowerStep, castleTier, builtStructures ?? []);
-    }
-
-    /// <summary>
-    /// Reverse of <see cref="RemoveForTransfer"/> - adopts a dominion coming back from the Hero/faction system
-    /// (nation disband) as a guild dominion again. Only ever called for zone 54/56, see that method's doc
-    /// comment. <paramref name="expeditionId"/> becomes the new owning guild (the nation's FoundingExpeditionId).
-    /// </summary>
-    public void AdoptFromNationTransfer(GuildDominionTransferState state, uint expeditionId)
-    {
-        var zoneId = state.Dominion.ZoneId;
-        state.Dominion.ExpeditionId = expeditionId;
-        state.Dominion.OwningFactionId = 0;
-        state.Dominion.FactionId = ResolveOwningFaction(expeditionId);
-
-        _guildDominions[zoneId] = state.Dominion;
-        _guardTowerSettingIdByZone[zoneId] = state.GuardTowerSettingId;
-        _guardTowerStepByZone[zoneId] = state.GuardTowerStep;
-        _castleTierByZone[zoneId] = state.CastleTier;
-        if (state.BuiltStructures.Count > 0)
-            _builtStructuresByZone[zoneId] = state.BuiltStructures;
-
-        UpsertRow(state.Dominion, state.GuardTowerSettingId, state.GuardTowerStep, state.CastleTier);
-        Logger.Info("Guild dominion zone {0} adopted back from nation transfer (guild {1})", zoneId, expeditionId);
-    }
-
     private static void UpsertRow(DominionData dominion, uint guardTowerSettingId, int guardTowerStep, int castleTier)
     {
         using var connection = MySQL.CreateConnection();
@@ -353,12 +292,6 @@ public class GuildDominionManager(IExpeditionManager expeditionManager, IGameDat
             LastSiegeEndTime = now,
             ReignStartTime = now,
             LastTaxRateChangedTime = now,
-            LastNationalTaxRateChagedTime = now,
-            NationalTaxRate = 0,
-            NationalMonumentDbId = 0,
-            NationalMonumentX = 0,
-            NationalMonumentY = 0,
-            NationalMonumentZ = 0,
             ObjId = 0,
             TerritoryData = DominionManager.BuildTerritoryData(guardTowerSettingId),
             SiegeTimers = new DominionSiegeTimers
@@ -539,12 +472,6 @@ public class GuildDominionManager(IExpeditionManager expeditionManager, IGameDat
             LastSiegeEndTime = DateTime.MinValue,
             ReignStartTime = DateTime.MinValue,
             LastTaxRateChangedTime = DateTime.MinValue,
-            LastNationalTaxRateChagedTime = DateTime.MinValue,
-            NationalTaxRate = 0,
-            NationalMonumentDbId = 0,
-            NationalMonumentX = 0,
-            NationalMonumentY = 0,
-            NationalMonumentZ = 0,
             ObjId = 0,
             TerritoryData = new DominionTerritoryData(),
             SiegeTimers = new DominionSiegeTimers

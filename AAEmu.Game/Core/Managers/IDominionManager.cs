@@ -83,9 +83,6 @@ public interface IDominionManager : ILoadable
     /// </summary>
     bool ResyncZoneWithZeroedTestData(ushort zoneId, int diagnosticPaddingBytes = 0);
 
-    /// <summary>Persists a newly-placed National Monument's doodad id/position onto a claimed dominion. Caller (NationManager) owns the placement rules - this just saves the result.</summary>
-    void SetNationalMonument(ushort zoneId, long dbId, float x, float y, float z);
-
     /// <summary>
     /// GM/testing tool: reverses everything Declare() does for a claimed zone group - deletes its dominions
     /// row, resets the lodestone House back to its pre-claim buried state (owner cleared, build step reset to
@@ -126,15 +123,4 @@ public interface IDominionManager : ILoadable
     /// unchanged if the zone isn't claimed.
     /// </summary>
     int AdvanceCastleTier(ushort zoneId, int targetTier);
-
-    /// <summary>
-    /// Player-nation founding (NationManager.DeclareIndependence): converts an already-claimed, guild-owned
-    /// dominion to nation ownership - clears ExpeditionId, sets OwningFactionId to the nation's own real
-    /// faction id, leaves the House/guard-tower-step/build-state entirely untouched (unlike UnclaimTerritory,
-    /// this is a same-territory ownership handoff, not a release). Returns false if the zone isn't claimed.
-    /// </summary>
-    bool TransferToFaction(ushort zoneId, uint newOwningFactionId);
-
-    /// <summary>Voluntary nation disband (NationManager.Disband, forced=false): hands an already-claimed, nation-owned dominion back to the founding guild. Returns false if the zone isn't claimed.</summary>
-    bool TransferToGuild(ushort zoneId, uint expeditionId);
 }

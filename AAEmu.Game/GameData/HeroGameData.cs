@@ -324,40 +324,6 @@ public class HeroGameData : Singleton<HeroGameData>, IGameDataLoader
     /// <summary>Every top_faction_id that has hero_rewards data - i.e. every faction that runs an election, including the 166 player-nation template.</summary>
     public IEnumerable<uint> FactionsWithRewards => _rewards.Select(r => r.TopFactionId).Distinct();
 
-    /// <summary>
-    /// Clones the 166 "국가 독립 기본 세력 설정" (Nation Independence Default Force Configuration) template
-    /// rows onto a newly-founded nation's own real faction id, in memory only - no SQLite write (compact.sqlite3
-    /// is shared static reference data, not something to mutate live). HeroManager has zero hardcoded faction
-    /// checks and just loops FactionsWithRewards, so once this runs the new faction id is immediately eligible
-    /// for the normal Hero election cycle with no further changes needed. No-ops (returns false) if
-    /// <paramref name="newFactionId"/> already has reward rows (idempotent - a re-run after a restart, once
-    /// NationManager.Load() re-populates the founded-nation list, calls this again for every existing nation).
-    /// </summary>
-    public bool CloneRewardsForNewFaction(uint templateFactionId, uint newFactionId)
-    {
-        if (_rewards.Any(r => r.TopFactionId == newFactionId))
-            return false;
-
-        var templateRows = _rewards.Where(r => r.TopFactionId == templateFactionId).ToList();
-        foreach (var template in templateRows)
-        {
-            _rewards.Add(new HeroReward
-            {
-                Id = template.Id, // template Id is only ever used as a DB PK on load - never re-persisted, safe to duplicate across in-memory clones
-                Ranking = template.Ranking,
-                TopFactionId = newFactionId,
-                HeroGradeId = template.HeroGradeId,
-                ItemSetId = template.ItemSetId,
-                DominionPointWeeklyCount = template.DominionPointWeeklyCount,
-                DominionTax = template.DominionTax,
-                DefaultRezDistrictBindCount = template.DefaultRezDistrictBindCount,
-                InferiorRezDistrictBindCount = template.InferiorRezDistrictBindCount
-            });
-        }
-
-        return templateRows.Count > 0;
-    }
-
     /// <summary>The hero_bonus_today_assignment row (target completion count) for a given hero_grade_id's
     /// bonus tier and a specific Hero-board today_quest_steps.id, or null if that grade/step combination
     /// has no assignment (e.g. grade 1/에페리움, which is never actually elected to).</summary>

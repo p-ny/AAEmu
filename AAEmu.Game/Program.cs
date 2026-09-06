@@ -226,9 +226,6 @@ public static class Program
                 services.AddSingleton<NameManager>();
                 services.AddSingleton<INameManager>(sp => sp.GetRequiredService<NameManager>());
 
-                services.AddSingleton<NationManager>();
-                services.AddSingleton<INationManager>(sp => sp.GetRequiredService<NationManager>());
-
                 services.AddSingleton<PlotManager>();
                 services.AddSingleton<IPlotManager>(sp => sp.GetRequiredService<PlotManager>());
 

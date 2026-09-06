@@ -43,16 +43,6 @@ public interface IGuildDominionManager : ILoadable
     /// </summary>
     House TryBuildDominionStructure(ushort zoneId, uint itemTemplateId, Models.Game.Char.Character declarer);
 
-    /// <summary>
-    /// Nation-founding bridge (2026-08-24): removes a claimed guild dominion's full live state from this
-    /// manager and returns it so DominionManager can adopt it as a nation, or null if the zone isn't a claimed
-    /// guild dominion. Only ever meaningful for zone 54/56 - see NationManager.DeclareIndependence.
-    /// </summary>
-    GuildDominionTransferState RemoveForTransfer(ushort zoneId);
-
-    /// <summary>Reverse of <see cref="RemoveForTransfer"/> - re-adopts a dominion coming back from a disbanded nation, owned by <paramref name="expeditionId"/>.</summary>
-    void AdoptFromNationTransfer(GuildDominionTransferState state, uint expeditionId);
-
     /// <summary>Real claim path (used by DeclareDominion.cs, the skill-driven flow, and the /claimterritory GM command) for the guild-owned zones - see GuildDominionManager.Declare's doc comment.</summary>
     DominionData Declare(ushort zoneId, uint expeditionId, House lodestone, Models.Game.Char.Character declarer);
 
@@ -68,6 +58,3 @@ public interface IGuildDominionManager : ILoadable
     /// <summary>Changes a claimed guild dominion's local tax rate; only a member of the owning Expedition may call this.</summary>
     void UpdateTaxRate(GameConnection connection, ushort zoneId, int taxRate);
 }
-
-/// <summary>Bundled live state for one guild dominion, carried across the guild/nation transfer bridge (RemoveForTransfer/AdoptFromNationTransfer) so nothing (guard tower progress, castle tier, dedup-built structures) is lost when a dominion crosses systems.</summary>
-public sealed record GuildDominionTransferState(DominionData Dominion, uint GuardTowerSettingId, int GuardTowerStep, int CastleTier, HashSet<uint> BuiltStructures);

@@ -48,12 +48,6 @@ public class DominionData : PacketMarshaler
     public DateTime LastSiegeEndTime { get; set; }
     public DateTime ReignStartTime { get; set; }
     public DateTime LastTaxRateChangedTime { get; set; } // TODO in struct long
-    public DateTime LastNationalTaxRateChagedTime { get; set; } // TODO in struct long
-    public ushort NationalTaxRate { get; set; }
-    public long NationalMonumentDbId { get; set; }
-    public float NationalMonumentX { get; set; }
-    public float NationalMonumentY { get; set; }
-    public float NationalMonumentZ { get; set; }
     public uint ObjId { get; set; }
     public DominionTerritoryData TerritoryData { get; set; }
     public DominionSiegeTimers SiegeTimers { get; set; } // TODO mb not correct namings
@@ -100,9 +94,8 @@ public class DominionData : PacketMarshaler
         stream.Write((ulong)Helpers.UnixTime(LastTaxRateChangedTime));
         // "point" (4B) - semantic unconfirmed, sent as 0 (safe - see WZDominionDataPacket's doc comment on why
         // a wrong VALUE in a fixed-size scalar is safe while a wrong WIDTH/count is not).
-        // NationalTaxRate/NationalMonumentDbId/X/Y/Z/ObjId have NO wire representation at all in this packet -
-        // confirmed now, not just suspected (the real struct only has this one 4-byte "point" field here) -
-        // those properties/DB columns stay for real persistence, just never sent on this packet.
+        // ObjId has NO wire representation at all in this packet - confirmed now, not just suspected (the
+        // real struct only has this one 4-byte "point" field here).
         stream.Write(0);
         // "bc" - an id-shaped WriteBc field (3B payload), semantic unconfirmed, sent as 0.
         stream.WriteBc(0u);

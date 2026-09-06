@@ -49,9 +49,8 @@ namespace AAEmu.Game.Core.Managers;
 ///    rows in MySQL `doodads` for item_template_id IN (47335, 47492) despite real in-game use. The client-side
 ///    "place a building in your territory" experience the user has is not backed by any spawn on this server.
 /// 2. `item_spawn_doodads` (the real item->doodad-template table the generic CSCreateDoodadPacket/
-///    DoodadManager.CreatePlayerDoodad placement path reads, see NationManager.PlaceNationalMonument for the
-///    analogous siege_zones.MonumentDoodadId-driven pattern that DOES have real data) has 542 real rows for
-///    other items, but ZERO for any of the 24 territory-blueprint items - the mapping was never authored.
+///    DoodadManager.CreatePlayerDoodad placement path reads) has 542 real rows for other items, but ZERO
+///    for any of the 24 territory-blueprint items - the mapping was never authored.
 /// 3. stepRow.NumGates/NumWalls (guard_tower_steps) are real numbers (e.g. 1 gate + 42-45 walls at step 4/5 of
 ///    settings 2/5/7/10) but neither `guard_tower_settings` nor `guard_tower_steps` has ANY doodad-template or
 ///    NPC-template id column - there is no data anywhere naming what a "gate"/"wall"/"guard" actually is.
@@ -218,12 +217,6 @@ public class DominionManager(ITaskManager taskManager, IExpeditionManager expedi
                 LastSiegeEndTime = reader.GetDateTime(reader.GetOrdinal("last_siege_end_time")),
                 ReignStartTime = reader.GetDateTime(reader.GetOrdinal("reign_start_time")),
                 LastTaxRateChangedTime = reader.GetDateTime(reader.GetOrdinal("last_tax_rate_changed_time")),
-                LastNationalTaxRateChagedTime = reader.GetDateTime(reader.GetOrdinal("last_national_tax_rate_changed_time")),
-                NationalTaxRate = (ushort)reader.GetInt32(reader.GetOrdinal("national_tax_rate")),
-                NationalMonumentDbId = reader.GetInt64(reader.GetOrdinal("national_monument_db_id")),
-                NationalMonumentX = reader.GetFloat(reader.GetOrdinal("national_monument_x")),
-                NationalMonumentY = reader.GetFloat(reader.GetOrdinal("national_monument_y")),
-                NationalMonumentZ = reader.GetFloat(reader.GetOrdinal("national_monument_z")),
                 ObjId = 0,
                 TerritoryData = BuildTerritoryData(guardTowerSettingId),
                 SiegeTimers = new DominionSiegeTimers
@@ -304,17 +297,6 @@ public class DominionManager(ITaskManager taskManager, IExpeditionManager expedi
             LastSiegeEndTime = now,
             ReignStartTime = now,
             LastTaxRateChangedTime = now,
-            LastNationalTaxRateChagedTime = now,
-            // Restored 2026-08-19 after being zeroed alongside the housing-style Dominion tax: research
-            // confirmed this is a genuinely separate, real Nation-level tax/receipt-mail system
-            // (MAIL_NATIONAL_TAX_RATE / national_tax_receipt strings, its own mail type) - not the mechanic the
-            // user objected to. Not otherwise wired up yet (no accrual, no payout) - a legitimate future
-            // feature, kept at a sane non-zero default rather than left at 0.
-            NationalTaxRate = 500,
-            NationalMonumentDbId = 0,
-            NationalMonumentX = 0,
-            NationalMonumentY = 0,
-            NationalMonumentZ = 0,
             ObjId = 0,
             TerritoryData = BuildTerritoryData(guardTowerSettingId),
             SiegeTimers = new DominionSiegeTimers
@@ -497,32 +479,6 @@ public class DominionManager(ITaskManager taskManager, IExpeditionManager expedi
         }
 
         WorldManager.Instance.BroadcastPacketToServer(new SCDominionTaxRatePacket(zoneId, dominion.TaxRate));
-    }
-
-    public void SetNationalMonument(ushort zoneId, long dbId, float x, float y, float z)
-    {
-        if (!_dominions.TryGetValue(zoneId, out var dominion))
-            return;
-
-        dominion.NationalMonumentDbId = dbId;
-        dominion.NationalMonumentX = x;
-        dominion.NationalMonumentY = y;
-        dominion.NationalMonumentZ = z;
-
-        using var connection = MySQL.CreateConnection();
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            UPDATE dominions
-            SET national_monument_db_id = @dbId, national_monument_x = @x, national_monument_y = @y, national_monument_z = @z
-            WHERE zone_id = @zoneId
-            """;
-        command.Parameters.AddWithValue("@dbId", dbId);
-        command.Parameters.AddWithValue("@x", x);
-        command.Parameters.AddWithValue("@y", y);
-        command.Parameters.AddWithValue("@z", z);
-        command.Parameters.AddWithValue("@zoneId", zoneId);
-        command.Prepare();
-        command.ExecuteNonQuery();
     }
 
     public void PayoutTax()
@@ -768,12 +724,6 @@ public class DominionManager(ITaskManager taskManager, IExpeditionManager expedi
             LastSiegeEndTime = DateTime.MinValue,
             ReignStartTime = DateTime.MinValue,
             LastTaxRateChangedTime = DateTime.MinValue,
-            LastNationalTaxRateChagedTime = DateTime.MinValue,
-            NationalTaxRate = 0,
-            NationalMonumentDbId = 0,
-            NationalMonumentX = 0,
-            NationalMonumentY = 0,
-            NationalMonumentZ = 0,
             ObjId = 0,
             TerritoryData = new DominionTerritoryData(), // real (non-null) instance so the wire structure stays the same shape, just zero-valued
             SiegeTimers = new DominionSiegeTimers { SiegePeriod = 0 },
@@ -797,115 +747,6 @@ public class DominionManager(ITaskManager taskManager, IExpeditionManager expedi
     /// Dominion state to Zone) - re-claiming the SAME zone group via Declare()/ClaimTerritory afterward
     /// re-sends WZDominionData for the new claim and corrects it either way.
     /// </summary>
-    /// <summary>
-    /// 2026-08-24: the guild/Hero-faction dominion split moved Exeloch/Sungold (54/56) out of `_dominions`
-    /// entirely, into GuildDominionManager - but nation-founding (the only caller of this method, see
-    /// NationManager.DeclareIndependence) is exclusively scoped to those exact two zones
-    /// (NationFoundableZoneGroups). So the normal path here is now a cross-manager migration, not an in-place
-    /// update: pull the full live state (guard tower step, castle tier, dedup-built structures - not just the
-    /// DominionData itself) out of GuildDominionManager via RemoveForTransfer, then insert it here as a real
-    /// Hero/faction-owned dominion. The old in-place branch is kept first for robustness (harmless no-op today
-    /// since nothing currently calls this for an already-`_dominions`-resident zone) rather than assuming it can
-    /// never happen.
-    /// </summary>
-    public bool TransferToFaction(ushort zoneId, uint newOwningFactionId)
-    {
-        if (_dominions.TryGetValue(zoneId, out var existing))
-        {
-            existing.ExpeditionId = 0;
-            existing.OwningFactionId = newOwningFactionId;
-            existing.FactionId = (FactionsEnum)newOwningFactionId;
-
-            using (var connection = MySQL.CreateConnection())
-            using (var command = connection.CreateCommand())
-            {
-                command.CommandText = "UPDATE dominions SET expedition_id = 0, faction_id = @factionId WHERE zone_id = @zoneId";
-                command.Parameters.AddWithValue("@factionId", newOwningFactionId);
-                command.Parameters.AddWithValue("@zoneId", zoneId);
-                command.Prepare();
-                command.ExecuteNonQuery();
-            }
-
-            WorldManager.Instance.BroadcastPacketToServer(new SCDominionDataPacket(existing, true, true));
-            Logger.Info("Dominion zone {0} transferred to nation faction {1} (was already Hero/faction-owned)", zoneId, newOwningFactionId);
-            return true;
-        }
-
-        var state = _guildDominionManager.RemoveForTransfer(zoneId);
-        if (state == null)
-            return false;
-
-        var dominion = state.Dominion;
-        dominion.ExpeditionId = 0;
-        dominion.OwningFactionId = newOwningFactionId;
-        dominion.FactionId = (FactionsEnum)newOwningFactionId;
-        // guild_dominions never carried these Hero/faction-only fields - seed them the same defaults Declare()
-        // uses for a brand-new claim rather than leaving them at DominionData's zeroed guild-side values.
-        var now = DateTime.UtcNow;
-        dominion.NationalTaxRate = 500;
-        dominion.NationalMonumentDbId = 0;
-        dominion.NationalMonumentX = 0;
-        dominion.NationalMonumentY = 0;
-        dominion.NationalMonumentZ = 0;
-        dominion.LastNationalTaxRateChagedTime = now;
-
-        _dominions[zoneId] = dominion;
-        _guardTowerSettingIdByZone[zoneId] = state.GuardTowerSettingId;
-        _guardTowerStepByZone[zoneId] = state.GuardTowerStep;
-        _castleTierByZone[zoneId] = state.CastleTier;
-        if (state.BuiltStructures.Count > 0)
-            _builtStructuresByZone[zoneId] = state.BuiltStructures;
-
-        Insert(dominion, state.GuardTowerSettingId);
-        using (var connection = MySQL.CreateConnection())
-        using (var command = connection.CreateCommand())
-        {
-            command.CommandText = "UPDATE dominions SET guard_tower_step = @step, castle_tier = @tier WHERE zone_id = @zoneId";
-            command.Parameters.AddWithValue("@step", state.GuardTowerStep);
-            command.Parameters.AddWithValue("@tier", state.CastleTier);
-            command.Parameters.AddWithValue("@zoneId", zoneId);
-            command.Prepare();
-            command.ExecuteNonQuery();
-        }
-
-        WorldManager.Instance.BroadcastPacketToServer(new SCDominionDataPacket(dominion, true, true));
-        Logger.Info("Dominion zone {0} transferred from the guild system to nation faction {1}", zoneId, newOwningFactionId);
-        return true;
-    }
-
-    /// <summary>Reverse of the guild-origin branch in <see cref="TransferToFaction"/> - see that method's doc comment. Only meaningful for zone 54/56 (nation disband).</summary>
-    public bool TransferToGuild(ushort zoneId, uint expeditionId)
-    {
-        if (!_dominions.TryGetValue(zoneId, out var dominion))
-            return false;
-
-        var guardTowerSettingId = _guardTowerSettingIdByZone.GetValueOrDefault(zoneId);
-        var guardTowerStep = _guardTowerStepByZone.GetValueOrDefault(zoneId);
-        var castleTier = _castleTierByZone.GetValueOrDefault(zoneId);
-        _builtStructuresByZone.Remove(zoneId, out var builtStructures);
-
-        _dominions.Remove(zoneId);
-        _guardTowerSettingIdByZone.Remove(zoneId);
-        _guardTowerStepByZone.Remove(zoneId);
-        _castleTierByZone.Remove(zoneId);
-
-        using (var connection = MySQL.CreateConnection())
-        using (var command = connection.CreateCommand())
-        {
-            command.CommandText = "DELETE FROM dominions WHERE zone_id = @zoneId";
-            command.Parameters.AddWithValue("@zoneId", zoneId);
-            command.Prepare();
-            command.ExecuteNonQuery();
-        }
-
-        var state = new GuildDominionTransferState(dominion, guardTowerSettingId, guardTowerStep, castleTier, builtStructures ?? []);
-        _guildDominionManager.AdoptFromNationTransfer(state, expeditionId);
-
-        WorldManager.Instance.BroadcastPacketToServer(new SCDominionDataPacket(dominion, true, true));
-        Logger.Info("Dominion zone {0} transferred back to guild {1} (moved back into the guild system)", zoneId, expeditionId);
-        return true;
-    }
-
     public bool UnclaimTerritory(ushort zoneId)
     {
         if (!_dominions.TryGetValue(zoneId, out var dominion))
@@ -1007,12 +848,6 @@ public class DominionManager(ITaskManager taskManager, IExpeditionManager expedi
             LastSiegeEndTime = DateTime.MinValue,
             ReignStartTime = DateTime.MinValue,
             LastTaxRateChangedTime = DateTime.MinValue,
-            LastNationalTaxRateChagedTime = DateTime.MinValue,
-            NationalTaxRate = 0,
-            NationalMonumentDbId = 0,
-            NationalMonumentX = 0,
-            NationalMonumentY = 0,
-            NationalMonumentZ = 0,
             ObjId = 0,
             TerritoryData = new DominionTerritoryData(),
             SiegeTimers = new DominionSiegeTimers
@@ -1236,16 +1071,12 @@ public class DominionManager(ITaskManager taskManager, IExpeditionManager expedi
                 (zone_id, expedition_id, faction_id, house, guard_tower_setting_id, tax_rate, x, y, z,
                  cur_house_tax_money, cur_hunt_tax_money, peace_tax_money, cur_house_tax_aa_point, peace_tax_aa_point,
                  last_paid_time, last_siege_end_time, reign_start_time, last_tax_rate_changed_time,
-                 last_national_tax_rate_changed_time, national_tax_rate, national_monument_db_id,
-                 national_monument_x, national_monument_y, national_monument_z, siege_period,
-                 non_pvp_start, non_pvp_duration)
+                 siege_period, non_pvp_start, non_pvp_duration)
             VALUES
                 (@zoneId, @expeditionId, @factionId, @house, @guardTowerSettingId, @taxRate, @x, @y, @z,
                  @curHouseTaxMoney, @curHuntTaxMoney, @peaceTaxMoney, @curHouseTaxAaPoint, @peaceTaxAaPoint,
                  @lastPaidTime, @lastSiegeEndTime, @reignStartTime, @lastTaxRateChangedTime,
-                 @lastNationalTaxRateChangedTime, @nationalTaxRate, @nationalMonumentDbId,
-                 @nationalMonumentX, @nationalMonumentY, @nationalMonumentZ, @siegePeriod,
-                 @nonPvPStart, @nonPvPDuration)
+                 @siegePeriod, @nonPvPStart, @nonPvPDuration)
             """;
         command.Parameters.AddWithValue("@zoneId", dominion.ZoneId);
         command.Parameters.AddWithValue("@expeditionId", dominion.ExpeditionId);
@@ -1265,12 +1096,6 @@ public class DominionManager(ITaskManager taskManager, IExpeditionManager expedi
         command.Parameters.AddWithValue("@lastSiegeEndTime", dominion.LastSiegeEndTime);
         command.Parameters.AddWithValue("@reignStartTime", dominion.ReignStartTime);
         command.Parameters.AddWithValue("@lastTaxRateChangedTime", dominion.LastTaxRateChangedTime);
-        command.Parameters.AddWithValue("@lastNationalTaxRateChangedTime", dominion.LastNationalTaxRateChagedTime);
-        command.Parameters.AddWithValue("@nationalTaxRate", dominion.NationalTaxRate);
-        command.Parameters.AddWithValue("@nationalMonumentDbId", dominion.NationalMonumentDbId);
-        command.Parameters.AddWithValue("@nationalMonumentX", dominion.NationalMonumentX);
-        command.Parameters.AddWithValue("@nationalMonumentY", dominion.NationalMonumentY);
-        command.Parameters.AddWithValue("@nationalMonumentZ", dominion.NationalMonumentZ);
         command.Parameters.AddWithValue("@siegePeriod", dominion.SiegeTimers.SiegePeriod);
         command.Parameters.AddWithValue("@nonPvPStart", dominion.NonPvPStart);
         command.Parameters.AddWithValue("@nonPvPDuration", dominion.NonPvPDuration);
