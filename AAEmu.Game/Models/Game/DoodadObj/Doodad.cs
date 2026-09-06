@@ -673,8 +673,14 @@ public class Doodad : BaseUnit
             if (func.NextPhase == -1)
             {
                 // We don't need to change phase, we stay in the current phase.
-                // the check is needed for Windstone id=1473
-                if (!HasOnlyGroupKindStart())
+                // the check is needed for Windstone id=1473. DespawnOnBareUse additionally keeps a
+                // DoodadFuncPersistentUse row (e.g. the Hero capital-city Statue) from being despawned
+                // by its own bare completion - see DoodadFuncPersistentUse's doc comment.
+                var onlyGroupKindStart = HasOnlyGroupKindStart();
+                var funcTemplate = onlyGroupKindStart
+                    ? null
+                    : DoodadManager.Instance.GetFuncTemplate(func.FuncId, func.FuncType);
+                if (!onlyGroupKindStart && funcTemplate?.DespawnOnBareUse != false)
                 {
                     if (FuncTask != null)
                     {

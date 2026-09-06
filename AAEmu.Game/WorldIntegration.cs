@@ -9,6 +9,7 @@ using AAEmu.Game.Core.Network.Connections;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.GameData;
+using AAEmu.Game.Models.Game;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.DoodadObj;
 using AAEmu.Game.Models.Game.Gimmicks;
@@ -433,6 +434,30 @@ public static class WorldIntegration
     /// <summary>WZHouseBuildProgress / Done (zone key, then housing timeline id).</summary>
     public static Action<uint, ushort, uint, int, int> RelayHouseBuildProgressToZone { get; set; }
     public static Action<uint, ushort> RelayHouseBuildDoneToZone { get; set; }
+
+    /// <summary>
+    /// WZDominionData (opcode 0x0060). Args: (rawZoneId for routing to the right Zone connection, the full
+    /// DominionData, diagnosticPaddingBytes). 2026-08-20: field layout fully ground-truth-confirmed via direct
+    /// decompile of DominionData::Read() and its 5 sub-functions in x2game-dev_dedicate.dll (not inference/
+    /// summary - read the raw decompiled C directly) - see WZDominionDataPacket's doc comment and the
+    /// aaemu-siege-castle-hero-nation memory's 2026-08-20 entry for the full field table. Zone previously had no
+    /// awareness a claim existed at all (this is what the 2026-08-19 crash incident was trying, and failing, to
+    /// fix - see aaemu-zone-wire-format-danger memory before ever touching this again). Third arg
+    /// (diagnosticPaddingBytes) is temporary, see WZDominionDataPacket's doc comment - always
+    /// WZDominionDataPacket.RequiredPaddingBytes for real (non-diagnostic) calls.
+    /// </summary>
+    public static Action<uint, DominionData, int> RelayDominionClaimedToZone { get; set; }
+
+    /// <summary>
+    /// Fires on real Zone (re)connect (ZwOpcodes.ZoneLoaded, see ZoneProtocolHandler.cs) - lets DominionManager
+    /// re-tell a freshly-loaded Zone about any claim it owns and re-announce its Territory Agent NPC, mirroring
+    /// the existing NotifyZoneReadyForHousing pattern. Added 2026-08-20 - see
+    /// DominionManager.RelayAllToZone's doc comment for the real, live-confirmed bug this fixes (Zone hosts
+    /// reload independently of World routinely, on a normal idle-unload cycle, and remember nothing on their
+    /// own - Dominion claims and the Territory Agent NPC were the only zone-owned state that hadn't been wired
+    /// to survive that, unlike houses/doodads/gimmicks which already were).
+    /// </summary>
+    public static Action<uint> NotifyZoneReadyForDominion { get; set; }
 
     /// <summary>WZGimmickCreated / Removed / Grasped.</summary>
     public static Action<GimmickSpawnData, int> RelayGimmickCreatedToZone { get; set; }
@@ -1238,6 +1263,21 @@ public static class WorldIntegration
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// True when <paramref name="owner"/> is a Zone-owned mirror NPC that Zone may already have torn
+    /// down and recycled the bcId for (despawned on Zone's own initiative, matching SpawnManager's
+    /// "the id may even belong to another unit by now" comment). Relaying a buff Change/Remove for it
+    /// would hand Zone's native ZoneBuffMan a stale or wrong-owner unit id - confirmed root cause of the
+    /// 2026-08-20 Salpimari crash (native unit-id table lookup has no bounds/generation check), see
+    /// aaemu-zone-buff-relay-stale-id memory. Only Zone-owned mirrors can go stale like this; Characters
+    /// and World-owned units are always safe to relay for.
+    /// </summary>
+    public static bool IsStaleZoneMirror(BaseUnit owner)
+    {
+        return owner is Npc { IsZoneMirror: true } mirrorNpc &&
+               (mirrorNpc.ZoneDespawnSignaled || FindUnitAcrossWorlds(mirrorNpc.ObjId) != mirrorNpc);
     }
 
     /// <summary>

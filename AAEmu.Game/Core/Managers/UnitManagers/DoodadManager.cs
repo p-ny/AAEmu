@@ -262,9 +262,29 @@ public class DoodadManager(INonUnitObjectIdManager objectIdManager, IDoodadIdMan
                             Id = reader.GetUInt32("id"),
                             AttachPointId = (AttachPointKind)reader.GetByte("attach_point_id"),
                             Space = reader.GetInt32("space"),
-                            BondKindId = (BondKind)reader.GetByte("bond_kind_id")
+                            BondKindId = (BondKind)reader.GetByte("bond_kind_id"),
+                            AnimActionId = reader.GetInt32("anim_action_id", 0)
                         };
                         _funcTemplates["DoodadFuncAttachment"].Add(func.Id, func);
+                    }
+                }
+            }
+
+            // doodad_func_hero_elections - id-only (no config columns), see DoodadFuncHeroElection.cs's doc
+            // comment for why this loader block had to exist at all (confirmed missing 2026-08-15).
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM doodad_func_hero_elections";
+                command.Prepare();
+                using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
+                {
+                    while (reader.Read())
+                    {
+                        var func = new DoodadFuncHeroElection
+                        {
+                            Id = reader.GetUInt32("id")
+                        };
+                        _funcTemplates["DoodadFuncHeroElection"].Add(func.Id, func);
                     }
                 }
             }
@@ -937,6 +957,33 @@ public class DoodadManager(INonUnitObjectIdManager objectIdManager, IDoodadIdMan
                             TooltipText = reader.GetString("tooltip_text")
                         };
                         _funcTemplates["DoodadFuncDevote"].Add(func.Id, func);
+                    }
+                }
+            }
+
+
+            // doodad_func_devotes (again) - 2026-08-31: the 3 capital-city Hero Statue rows were data-patched
+            // to actual_func_type='DoodadFuncFactionStatueDevote' (see HeroManager/statue work) so they need
+            // their own entry in _funcTemplates too - this loader is a hardcoded per-type-string dispatch, not
+            // generic reflection, so a subclass with a new type name is otherwise silently never populated
+            // (confirmed live: interacting with the statue had no effect at all - the func lookup was failing).
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM doodad_func_devotes";
+                command.Prepare();
+                using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
+                {
+                    while (reader.Read())
+                    {
+                        var func = new DoodadFuncFactionStatueDevote
+                        {
+                            Id = reader.GetUInt32("id"),
+                            Count = reader.GetInt32("count"),
+                            ItemId = reader.GetUInt32("item_id"),
+                            ItemCount = reader.GetInt32("item_count"),
+                            TooltipText = reader.GetString("tooltip_text")
+                        };
+                        _funcTemplates["DoodadFuncFactionStatueDevote"].Add(func.Id, func);
                     }
                 }
             }
@@ -2143,7 +2190,8 @@ public class DoodadManager(INonUnitObjectIdManager objectIdManager, IDoodadIdMan
                 }
             }
 
-            // doodad_func_uses
+            // doodad_func_uses (also backs DoodadFuncPersistentUse - see its own doc comment; both read
+            // the exact same table/columns, only doodad_funcs.actual_func_type differs per row)
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM doodad_func_uses";
@@ -2152,12 +2200,15 @@ public class DoodadManager(INonUnitObjectIdManager objectIdManager, IDoodadIdMan
                 {
                     while (reader.Read())
                     {
-                        var func = new DoodadFuncUse
-                        {
-                            Id = reader.GetUInt32("id"),
-                            SkillId = reader.GetUInt32("skill_id", 0)
-                        };
-                        _funcTemplates["DoodadFuncUse"].Add(func.Id, func);
+                        var id = reader.GetUInt32("id");
+                        var skillId = reader.GetUInt32("skill_id", 0);
+                        // Same underlying row can be referenced by a doodad_funcs row typed either
+                        // DoodadFuncUse, DoodadFuncPersistentUse, or DoodadFuncFactionStatueTimeGatedUse
+                        // (actual_func_type decides which one Doodad.cs actually resolves at interaction
+                        // time) - populate all three dictionaries so GetFuncTemplate resolves correctly.
+                        _funcTemplates["DoodadFuncUse"].Add(id, new DoodadFuncUse { Id = id, SkillId = skillId });
+                        _funcTemplates["DoodadFuncPersistentUse"].Add(id, new DoodadFuncPersistentUse { Id = id, SkillId = skillId });
+                        _funcTemplates["DoodadFuncFactionStatueTimeGatedUse"].Add(id, new DoodadFuncFactionStatueTimeGatedUse { Id = id, SkillId = skillId });
                     }
                 }
             }

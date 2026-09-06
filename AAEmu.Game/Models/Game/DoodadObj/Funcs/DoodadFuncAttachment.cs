@@ -14,12 +14,23 @@ public class DoodadFuncAttachment : DoodadFuncTemplate
     public int Space { get; init; }
     public BondKind BondKindId { get; init; }
 
+    /// <summary>
+    /// Confirmed via a rejected community PR's disassembly (github.com/AAEmu/AAEmu/pull/1516, closed for code
+    /// shape not for wrong analysis): 431 of 524 shipped doodad_func_attachments rows - beds, loungers, and
+    /// the Hero Throne specifically - carry no bond kind at all but DO carry an animation, and the seat
+    /// interaction is meant to fire on either. Without this, every one of those doodads fell through to the
+    /// slave-binding branch below, which does nothing for a free-standing doodad - "the interaction died
+    /// silently after the func was found." The column already existed in this codebase's own data
+    /// (doodad_func_attachments.anim_action_id), just unread.
+    /// </summary>
+    public int AnimActionId { get; init; }
+
     public override void Use(BaseUnit caster, Doodad owner, uint skillId, int nextPhase = 0)
     {
         Logger.Trace("DoodadFuncAttachment");
         if (caster is Character character)
         {
-            if (BondKindId > BondKind.BondInvalid)
+            if (BondKindId > BondKind.BondInvalid || AnimActionId != 0)
             {
                 var spot = owner.Seat.LoadPassenger(character, owner.ObjId, Space); // ask for a free meta number for landing
                 if (spot == -1)

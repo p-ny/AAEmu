@@ -145,6 +145,15 @@ public static class Program
                 services.AddSingleton<CrimeManager>();
                 services.AddSingleton<ICrimeManager>(sp => sp.GetRequiredService<CrimeManager>());
 
+                services.AddSingleton<DominionManager>();
+                services.AddSingleton<IDominionManager>(sp => sp.GetRequiredService<DominionManager>());
+
+                services.AddSingleton<GuildDominionManager>();
+                services.AddSingleton<IGuildDominionManager>(sp => sp.GetRequiredService<GuildDominionManager>());
+
+                services.AddSingleton<DominionZoneLockManager>();
+                services.AddSingleton<IDominionZoneLockManager>(sp => sp.GetRequiredService<DominionZoneLockManager>());
+
                 services.AddSingleton<DuelManager>();
                 services.AddSingleton<IDuelManager>(sp => sp.GetRequiredService<DuelManager>());
 
@@ -177,6 +186,9 @@ public static class Program
 
                 services.AddSingleton<GameScheduleManager>();
                 services.AddSingleton<IGameScheduleManager>(sp => sp.GetRequiredService<GameScheduleManager>());
+
+                services.AddSingleton<HeroManager>();
+                services.AddSingleton<IHeroManager>(sp => sp.GetRequiredService<HeroManager>());
 
                 services.AddSingleton<HousingManager>();
                 services.AddSingleton<IHousingManager>(sp => sp.GetRequiredService<HousingManager>());
@@ -214,6 +226,9 @@ public static class Program
                 services.AddSingleton<NameManager>();
                 services.AddSingleton<INameManager>(sp => sp.GetRequiredService<NameManager>());
 
+                services.AddSingleton<NationManager>();
+                services.AddSingleton<INationManager>(sp => sp.GetRequiredService<NationManager>());
+
                 services.AddSingleton<PlotManager>();
                 services.AddSingleton<IPlotManager>(sp => sp.GetRequiredService<PlotManager>());
 
@@ -234,6 +249,9 @@ public static class Program
 
                 services.AddSingleton<ShipyardManager>();
                 services.AddSingleton<IShipyardManager>(sp => sp.GetRequiredService<ShipyardManager>());
+
+                services.AddSingleton<SiegeManager>();
+                services.AddSingleton<ISiegeManager>(sp => sp.GetRequiredService<SiegeManager>());
 
                 services.AddSingleton<SkillManager>();
                 services.AddSingleton<ISkillManager>(sp => sp.GetRequiredService<SkillManager>());

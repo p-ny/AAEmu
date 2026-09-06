@@ -50,6 +50,7 @@ public sealed class GameService : IHostedService, IDisposable
         // Check for updates
         using (var connection = MySQL.CreateConnection())
         {
+            Logger.Info($"Resolved Connections.AutoApplyUpdates = {AppConfiguration.Instance.Connections.AutoApplyUpdates}");
             if (!MySqlDatabaseUpdater.Run(connection, "aaemu_game", AppConfiguration.Instance.Connections.MySQLProvider.Database,
                     AppConfiguration.Instance.Connections.AutoApplyUpdates))
             {

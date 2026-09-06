@@ -187,5 +187,29 @@ public enum SpecialType
     VariableCashCharge = 193,
     AdditionalSkillPoint = 194,
     ChangeForceAttackState = 195,
-    GainAppellationStampLifespan = 196
+    GainAppellationStampLifespan = 196,
+
+    /// <summary>
+    /// Server-only synthetic id, 2026-08-19 - not a real shipped ArcheAge special-effect type. skill 41079 (the
+    /// shared use-skill for the 5 guard-tower wall/gate blueprint items) has zero skill_effects rows in this
+    /// build's client data; this value only needs to match what we ourselves insert into the server's own
+    /// compact.sqlite3 `special_effects.special_effect_type_id` for the new row backing that skill.
+    /// </summary>
+    AdvanceGuardTowerStep = 197,
+
+    /// <summary>
+    /// Server-only synthetic id, 2026-08-21 - same reasoning as AdvanceGuardTowerStep above, for the OLD
+    /// (guild-owned) castle system's Keep/Castle/Palace tier items (skill 33550, also zero skill_effects rows
+    /// in shipped data). See AdvanceCastleTier.cs.
+    /// </summary>
+    AdvanceCastleTier = 198,
+
+    /// <summary>
+    /// Server-only synthetic id, 2026-09-05 - the 5 real Mobilization Order flag declaration skills
+    /// (40150/40175 Nuia, 43726 Pirate, 50166/50168 Haranya) each already have their own real
+    /// InteractionEffect (item consumption) and WorldMessageEffect (announcement) rows, but nothing
+    /// shipped tracks the resulting 30-minute active window server-side. See
+    /// DeclareMobilizationTimeState.cs.
+    /// </summary>
+    DeclareMobilizationTimeState = 199
 }

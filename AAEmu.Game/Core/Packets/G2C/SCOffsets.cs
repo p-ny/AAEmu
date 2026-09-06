@@ -655,6 +655,7 @@ public static class SCOffsets
     public const ushort SCFactionCompetitionUpdatePointPacket = 0x338;
     public const ushort SCFactionImmigrateLimitDataPacket = 0x51;
     public const ushort SCFactionMobilizationOrderPacket = 0x3D;
+    public const ushort SCFactionMobilizationOrderSuccessPacket = 0x3E;
     public const ushort SCFactionRelationRequestPacket = 0x2B;
     public const ushort SCFactionRelationResponsePacket = 0x2C;
     public const ushort SCFamilyChangeMemberLevelPacket = 0x5E;
@@ -680,6 +681,13 @@ public static class SCOffsets
     public const ushort SCHeroElectionMailPacket = 0x2B1;
     public const ushort SCHeroGiveDominionPointPacket = 0x2B6;
     public const ushort SCHeroInfoDeletedPacket = 0x2B2;
+    public const ushort SCHeroRankingListPacket = 0x2AB;
+    public const ushort SCHeroCandidateListPacket = 0x2AC;
+    public const ushort SCHeroListPacket = 0x2AE;
+    public const ushort SCHeroEventStatePacket = 0x2B0;
+    public const ushort SCHeroInfoUpdatedPacket = 0x2B3;
+    public const ushort SCHeroMobilizationOrderUpdatedPacket = 0x2B4;
+    public const ushort SCHeroAllScorePacket = 0x2B5;
     public const ushort SCHeroScoreUpdatedPacket = 0x2AA;
     public const ushort SCHeroSeasonInfoPacket = 0x2A8;
     public const ushort SCHeroSeasonOffPacket = 0x2A9;

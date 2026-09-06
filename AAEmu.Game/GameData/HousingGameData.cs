@@ -1,4 +1,4 @@
-using AAEmu.Commons.IO;
+﻿using AAEmu.Commons.IO;
 using System.Numerics;
 
 using AAEmu.Commons.Utils;
@@ -22,6 +22,11 @@ public class HousingGameData : Singleton<HousingGameData>, IGameDataLoader
     private List<ItemHousingDecoration> _housingItemHousingDecorations = [];
     private List<HousingItemHousings> _housingItemHousings = [];
     private Dictionary<uint, HousingTemplate> _housingTemplates = [];
+    /// <summary>housing_id values from dominion_housings (Altar/Farm/Workshop/Warehouse/Supervision-post) - the special buildings a claimed Dominion's Expedition members can construct on its territory. See HousingManager.Build's Expedition-membership gate.
+    /// New (Hero/faction-owned) castle system only, as of the 2026-08-24 guild/new-system split - see IsGuildDominionHousingTemplate for the Exeloch/Sungold equivalent.</summary>
+    private HashSet<uint> _dominionHousingTemplateIds = [];
+    /// <summary>housing_id values from guild_dominion_housings - the old (guild-owned) castle system's Keep/Castle/Palace tiers and aux buildings (Exeloch/Sungold Fields only). Split out 2026-08-24 as part of isolating the two castle systems - see GuildDominionManager.</summary>
+    private HashSet<uint> _guildDominionHousingTemplateIds = [];
 
     public void Load(SqliteConnection connection)
     {
@@ -164,8 +169,14 @@ public class HousingGameData : Singleton<HousingGameData>, IGameDataLoader
                                 if (templateBindings != null &&
                                     templateBindings.AttachPointId.TryGetValue(bindingDoodad.AttachPointId,
                                         out var pos))
+                                {
                                     bindingDoodad.Position = pos.Clone();
+                                    bindingDoodad.HasResolvedPosition = true;
+                                }
 
+                                // Left unresolved until the model can supply it. The placeholder keeps the
+                                // property non-null; HasResolvedPosition is what says whether it means
+                                // anything, since the origin is a legitimate offset.
                                 bindingDoodad.Position ??= new WorldSpawnPosition();
 
                                 doodads.Add(bindingDoodad);
@@ -259,6 +270,41 @@ public class HousingGameData : Singleton<HousingGameData>, IGameDataLoader
             }
         }
 
+        _dominionHousingTemplateIds = [];
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT housing_id FROM dominion_housings";
+            command.Prepare();
+            using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
+            {
+                while (reader.Read())
+                    _dominionHousingTemplateIds.Add(reader.GetUInt32("housing_id"));
+            }
+        }
+
+        // 2026-08-31: `guild_dominion_housings` (the old-system/Exeloch-Sungold sibling of `dominion_housings`
+        // above) does not actually exist in any copy of compact.sqlite3, or in MySQL - confirmed via direct
+        // query, this is not a transient issue. Querying it unconditionally crashed the World server on every
+        // boot (SqliteException, uncaught by design per this loader's own "fail loud" policy - see
+        // GameDataManager.LoadGameData's comment). Guarded here rather than deleting the feature -
+        // `IsGuildDominionHousingTemplate` (below) is real, load-bearing gating logic in `HousingManager.cs` -
+        // but the underlying table genuinely needs to be created (with real Exeloch/Sungold building template
+        // ids) before this check can ever return true for anything. Flagging for whoever picks up the
+        // guild/castle system thread next - see aaemu-guild-hero-dominion-split memory.
+        _guildDominionHousingTemplateIds = [];
+        try
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT housing_id FROM guild_dominion_housings";
+            command.Prepare();
+            using var reader = new SQLiteWrapperReader(command.ExecuteReader());
+            while (reader.Read())
+                _guildDominionHousingTemplateIds.Add(reader.GetUInt32("housing_id"));
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException ex)
+        {
+            Logger.Warn(ex, "guild_dominion_housings table is missing - IsGuildDominionHousingTemplate will return false for everything until it's created");
+        }
     }
 
     public void PostLoad()
@@ -273,13 +319,14 @@ public class HousingGameData : Singleton<HousingGameData>, IGameDataLoader
     }
 
     /// <summary>
-    /// Replaces the binding offsets taken from housing_bindings.json with the ones held in the model the house
-    /// actually uses. Runs in PostLoad because the attach point table is built by another loader and the
-    /// loaders' Load() order is reflection order.
+    /// Fills in binding offsets that the json table does not define, from the model the house actually uses.
+    /// Runs in PostLoad because the attach point table is built by another loader and the loaders' Load()
+    /// order is reflection order.
     ///
-    /// The json only ever covered 104 of the 631 templates that have bindings, keyed by template id; everything
-    /// else fell back to (0,0,0) and stacked its doodads on the house origin. Attach point geometry belongs to
-    /// the model, not the template, so templates sharing a model now resolve from the same place.
+    /// Attach point geometry belongs to the model rather than to the template, so templates sharing a model
+    /// resolve from the same place. The json covers a minority of the templates that have bindings; the rest
+    /// depend entirely on this pass, and any binding still unresolved afterwards stays marked as such rather
+    /// than being given a placeholder offset.
     /// </summary>
     private void ResolveBindingPositionsFromClientData()
     {
@@ -296,9 +343,9 @@ public class HousingGameData : Singleton<HousingGameData>, IGameDataLoader
 
             foreach (var bindingDoodad in template.HousingBindingDoodad)
             {
-                // Only fill the gaps. Where housing_bindings.json has an offset it stays — the two sources
-                // disagree on a handful of points and the json is what the server has been running on.
-                if (bindingDoodad.Position != null && bindingDoodad.Position.AsPositionVector() != Vector3.Zero)
+                // Only fill the gaps. Where the json defines an offset it stays: the two sources disagree on
+                // a handful of points and the json is what the server has been running on.
+                if (bindingDoodad.HasResolvedPosition)
                     continue;
 
                 var pos = ModelAttachPointGameData.Instance
@@ -307,6 +354,7 @@ public class HousingGameData : Singleton<HousingGameData>, IGameDataLoader
                 if (pos != null)
                 {
                     bindingDoodad.Position = pos.Clone();
+                    bindingDoodad.HasResolvedPosition = true;
                     resolved++;
                 }
                 else
@@ -406,10 +454,19 @@ public class HousingGameData : Singleton<HousingGameData>, IGameDataLoader
         return _housingTemplates.GetValueOrDefault(designId);
     }
 
+    public bool IsDominionHousingTemplate(uint templateId) => _dominionHousingTemplateIds.Contains(templateId);
+
+    /// <summary>Old (guild-owned) castle system equivalent of <see cref="IsDominionHousingTemplate"/> - Exeloch/Sungold Fields only. See GuildDominionManager.</summary>
+    public bool IsGuildDominionHousingTemplate(uint templateId) => _guildDominionHousingTemplateIds.Contains(templateId);
+
     /// <summary>
-    /// housings.id 830/831/832 (Green/Red/Blue Flag Residence of High Spirit) - a universal per-guild
-    /// clubhouse placeable in ordinary continent housing zones, unrelated to castle/dominion territory
-    /// ownership. No dedicated game-data table exists for this set, so it's hardcoded here.
+    /// housings.id 830/831/832 ("드높은 기상의 [녹색/붉은/푸른] 깃발 저택" - Green/Red/Blue Flag Residence of
+    /// High Spirit, category_id 36, item_housings 564/565/566), confirmed 2026-08-27 via direct compact.sqlite3
+    /// lookup - no dedicated game-data table exists for this set (unlike dominion_housings/
+    /// guild_dominion_housings), so it's hardcoded here the same way. A universal per-guild clubhouse, entirely
+    /// unrelated to castle/dominion territory ownership - category 36 maps to housing_group_categories rows
+    /// for groups 1/8/17 (the ordinary continent housing groups), so no special zone unlock is needed, only
+    /// the guild-membership + one-per-guild gate in HousingManager.Build.
     /// </summary>
     private static readonly HashSet<uint> ExpeditionResidenceTemplateIds = [830, 831, 832];
 
@@ -439,6 +496,18 @@ public class HousingGameData : Singleton<HousingGameData>, IGameDataLoader
                 return design.Item_Id;
         }
         return 0;
+    }
+
+    /// <summary>
+    /// Get house design (housing template id) that a given item template places, from item_housings.
+    /// Reverse of <see cref="GetItemIdByDesign"/>. Returns 0 if the item has no housing design (not every
+    /// item that shares a placement skill is actually a buildable structure).
+    /// </summary>
+    /// <param name="itemId"></param>
+    /// <returns></returns>
+    public uint GetDesignByItemId(uint itemId)
+    {
+        return _housingItemHousings.FirstOrDefault(h => h.Item_Id == itemId)?.Design_Id ?? 0;
     }
 
     /// <summary>

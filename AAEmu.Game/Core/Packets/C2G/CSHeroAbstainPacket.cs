@@ -1,15 +1,14 @@
 using AAEmu.Commons.Network;
+using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
 /// <summary>
-/// TODO: the body is parsed but nothing acts on it yet.
+/// TypeValue's field name is unconfirmed. HeroManager.Abstain always acts on the caller's own character
+/// regardless of this payload - trusting a client-supplied id to withdraw an arbitrary candidate would be
+/// exploitable, and a candidate abstaining anyone but themselves wouldn't make sense anyway.
 /// </summary>
-/// <remarks>
-/// Field order, widths and names come from the 10.0.2.13 client's serializer, which passes each
-/// value's name alongside the value:
-/// </remarks>
 public class CSHeroAbstainPacket() : GamePacket(CSOffsets.CSHeroAbstainPacket, 1)
 {
     public ulong TypeValue { get; private set; }
@@ -17,5 +16,6 @@ public class CSHeroAbstainPacket() : GamePacket(CSOffsets.CSHeroAbstainPacket, 1
     public override void Read(PacketStream stream)
     {
         TypeValue = stream.ReadUInt64();
+        HeroManager.Instance.Abstain(Connection);
     }
 }
